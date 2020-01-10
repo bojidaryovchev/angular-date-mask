@@ -6,9 +6,9 @@ it supports dd, MM, yyyy as formats
 
 it makes sure the day is between 1 and 31, the month between 1 and 12 and the year larger than 1895
 
-it wont allow you entering invalid date/month/year
+it wont allow you to enter invalid date/month/year
 
-it does not autofix dates, you have to handle that yourself (e.g. if one enters 31/02/2020 it wont change it
+it does not autofix dates, you have to handle that yourself (e.g. if one enters 31/02/2020 it wont change it)
 
 This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 8.3.9.
 
