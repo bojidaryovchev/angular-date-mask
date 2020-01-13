@@ -1,19 +1,24 @@
 import { Directive, ElementRef, Input, OnInit } from '@angular/core';
 import { Format } from '../enums/format.enum';
+import { dayValidator } from '../validators/day.validator';
+import { monthValidator } from '../validators/month.validator';
+import { yearValidator } from '../validators/year.validator';
 
-@Directive({ selector: '[ngDateMask]', host: { '(keydown)': 'onKeyDown($event)', '(input)': 'onInput($event)' } })
+@Directive({ selector: '[ngDateMask]', host: { '(keydown)': 'onKeyDown($event)', '(input)': 'onInput($event)', '(mousedown)': 'onMouseDown($event)' } })
 export class DateMaskDirective implements OnInit {
   private readonly backspace: string = 'Backspace';
   private readonly arrowLeft: string = 'ArrowLeft';
   private readonly arrowRight: string = 'ArrowRight';
   private readonly home: string = 'Home';
   private readonly end: string = 'End';
+  private readonly tab: string = 'Tab';
+  private readonly f5: string = 'F5';
 
   @Input() format: string;
   @Input() separator: string;
 
-  validatorByIndex: { [key: number]: Function; } = {};
-  formatLengthByIndex: { [key: number]: number; } = {};
+  validatorByIndex: { [key: number]: Function } = {};
+  formatLengthByIndex: { [key: number]: number } = {};
 
   constructor(private readonly elementRef: ElementRef<HTMLInputElement>) {}
 
@@ -23,15 +28,15 @@ export class DateMaskDirective implements OnInit {
 
       switch (f) {
         case Format.Day:
-          validator = this.dayValidator;
+          validator = dayValidator;
 
           break;
         case Format.Month:
-          validator = this.monthValidator;
+          validator = monthValidator;
 
           break;
         case Format.Year:
-          validator = this.yearValidator;
+          validator = yearValidator;
 
           break;
       }
@@ -58,51 +63,72 @@ export class DateMaskDirective implements OnInit {
   }
 
   onKeyDown(event: KeyboardEvent) {
-    if (event.key === this.arrowLeft || event.key === this.arrowRight || event.key === this.home || event.key === this.end) {
+    if (event.key === this.arrowLeft || event.key === this.arrowRight || event.key === this.home || event.key === this.end || event.key == this.f5) {
       return;
     }
 
     const target: HTMLInputElement = event.target as HTMLInputElement;
     const index: number = target.selectionStart;
 
-    if ((!/^\d$/g.test(event.key) || index === this.length) && event.key !== this.backspace) {
+    if (event.key === this.tab) {
+      const separatorIndex: number = this.input.value.indexOf(this.separator);
+
+      if (separatorIndex !== -1) {
+        const nextSeparatorIndex: number = this.input.value.lastIndexOf(this.separator);
+
+        if (separatorIndex !== nextSeparatorIndex) {
+          if (index <= separatorIndex) {
+            this.setCaretSelection(this.input, separatorIndex + 1, nextSeparatorIndex);
+          } else if (index > nextSeparatorIndex) {
+            this.setCaretSelection(this.input, 0, separatorIndex);
+            
+          } else {
+            this.setCaretSelection(this.input, nextSeparatorIndex + 1, this.input.value.length);
+          }
+        } else {
+          if (index >= separatorIndex) {
+            this.setCaretSelection(this.input, 0, separatorIndex);
+          } else {
+            this.setCaretSelection(this.input, separatorIndex + 1, this.input.value.length);
+          }
+        }
+      }
+
       return false;
     }
 
-    let separatorExistsAfterwards: boolean = !!this.input.value.split('').filter((_, i) => i >= index).find(i => i === this.separator);
-
-    if (event.key === this.backspace && !this.validatorByIndex[index - 2] && !separatorExistsAfterwards) {
-      const inputValueArray: string[] = this.input.value.split('');
-
-      inputValueArray.pop();
-      inputValueArray.pop();
-
-      this.input.value = inputValueArray.join('');
-    }
-
-    if (event.key === this.backspace) {
+    if (event.key !== this.backspace) {
+      if (!this.isNumber(event.key) || index === this.length) {
+        return false;
+      }
+    } else {
       if (!this.input.value[index - 1]) {
         return false;
       }
 
-      if (separatorExistsAfterwards && this.input.value[index - 1] === this.separator) {
-        return false;
+      const separatorExistsAfterwards: boolean = !!this.input.value
+        .split('')
+        .filter((_, i) => i >= index)
+        .find(i => i === this.separator);
+
+      if (separatorExistsAfterwards) {
+        if (this.input.value[index - 1] === this.separator) {
+          return false;
+        }
+      } else {
+        if (this.input.value[index - 2] === this.separator) {
+          this.removeLast(2 + this.input.value.length - index);
+
+          return false;
+        }
       }
 
       return;
     }
 
-    let prevLength: number = 0;
+    const delta: number = this.delta(index);
 
-    for (let ix: number = index - 1; this.input.value[ix] !== this.separator && ix >= 0; ix--) {
-      prevLength++;
-    }
-
-    if (this.input.value[index] === this.separator && prevLength === this.formatLengthByIndex[index - 1]) {
-      return false;
-    }
-
-    const validator: Function = this.validatorByIndex[index];
+    const validator: Function = this.validatorByIndex[index + delta];
     const validatorStringArray: string[] = [event.key];
 
     let validatorPosition: number = 0;
@@ -113,11 +139,15 @@ export class DateMaskDirective implements OnInit {
       validatorPosition++;
     }
 
+    if (!validator) {
+      return false;
+    }
+
     if (!validator(validatorStringArray.join(''), validatorPosition)) {
       return false;
     }
 
-    if (this.input.value[index + 1] && this.input.value[index] !== this.separator || (this.input.value[index] && index == this.length - 1)) {
+    if ((this.input.value[index + 1] && this.input.value[index] !== this.separator) || (this.input.value[index] && index + delta == this.length - 1)) {
       let inputValueArray = this.input.value.split('');
 
       for (let i = 0; i < inputValueArray.length; i++) {
@@ -137,123 +167,107 @@ export class DateMaskDirective implements OnInit {
       return false;
     }
 
-    if (this.input.value[index] && index + 1 === this.length) {
+    const formatLength = this.formatLength(index);
+
+    if (formatLength === this.formatLengthByIndex[index + delta]) {
       return false;
     }
   }
 
-  onInput(event: KeyboardEvent) {
+  onMouseDown() {
+    return false;
+  }
+
+  onInput(event) {
     const target: HTMLInputElement = event.target as HTMLInputElement;
     const index: number = target.selectionStart;
-    const isBeforeEnd: boolean = index < this.length;
+    const delta: number = this.delta(index);
+    const isBeforeEnd: boolean = index + delta < this.length;
 
-    if (!this.validatorByIndex[index] && isBeforeEnd && this.input.value.length < this.length) {
+    if (!this.validatorByIndex[index + delta] && isBeforeEnd && this.input.value.length < this.length && event.inputType !== 'deleteContentBackward') {
       this.input.value += this.separator;
     }
   }
 
-  private monthValidator(string: string, position: number): boolean {
-    if (position === 0) {
-      if (+string > 1) {
-        return false;
-      }
-    }
-
-    if (position === 1) {
-      if (+string[position - 1] === 0) {
-        if (+string[position] === 0) {
-          return false;
-        }
-      }
-
-      if (+string[position - 1] === 1) {
-        if (+string[position] > 2) {
-          return false;
-        }
-      }
-    }
-
-    return true;
+  private isNumber(number: string): boolean {
+    return /^\d$/g.test(number);
   }
 
-  private dayValidator(string: string, position: number): boolean {
-    if (position === 0) {
-      if (+string > 3) {
-        return false;
-      }
+  private removeLast(count: number) {
+    const inputValueArray: string[] = this.input.value.split('');
+
+    for (let index = 0; index < count; index++) {
+      inputValueArray.pop();
     }
 
-    if (position === 1) {
-      if (+string[position - 1] === 0) {
-        if (+string[position] === 0) {
-          return false;
-        }
-      }
-
-      if (+string[position - 1] === 3) {
-        if (+string[position] > 1) {
-          return false;
-        }
-      }
-    }
-
-    return true;
+    this.input.value = inputValueArray.join('');
   }
 
-  private yearValidator(string: string, position: number): boolean {
-    if (position === 0) {
-      if (+string < 1 || +string > 9) {
-        return false;
+  private formatLength(index: number) {
+    let formatLength: number = 0;
+
+    for (let ix: number = index - 1; this.input.value[ix] && this.input.value[ix] !== this.separator && ix >= 0; ix--) {
+      formatLength++;
+    }
+
+    for (let ix: number = index; this.input.value[ix] && this.input.value[ix] !== this.separator && ix < this.length; ix++) {
+      formatLength++;
+    }
+
+    return formatLength;
+  }
+
+  private delta(index: number): number {
+    let delta: number = 0;
+
+    if (this.input.value) {
+      let previousSeparators: string[] = this.input.value
+        .split('')
+        .filter((_, i) => i < index)
+        .filter(i => i === this.separator);
+
+      let separatorsCount: number = previousSeparators.length;
+      let subdelta: number = 0;
+
+      if (this.input.value[index] === this.separator) {
+        separatorsCount++;
+        subdelta++;
+      }
+
+      if (separatorsCount === 2) {
+        const inputLastIndex = this.input.value.lastIndexOf(this.separator);
+        const formatLastIndex = this.format.lastIndexOf(this.separator);
+
+        delta = this.format.substring(0, formatLastIndex).length - this.input.value.substring(0, inputLastIndex).length - subdelta;
+      } else if (separatorsCount === 1) {
+        const inputIndex = this.input.value.indexOf(this.separator);
+        const formatIndex = this.format.indexOf(this.separator);
+
+        delta = this.format.substring(0, formatIndex).length - this.input.value.substring(0, inputIndex).length - subdelta;
       }
     }
 
-    if (position === 1) {
-      if (+string[position - 1] === 1) {
-        if (+string[position] < 8) {
-          return false;
-        }
-      }
-    }
-
-    if (position === 2) {
-      if (+string[position - 2] === 1 && +string[position - 1] === 8) {
-        if (+string[position] < 9) {
-          return false;
-        }
-      }
-    }
-
-    if (position === 3) {
-      if (+string[position - 3] === 1 && +string[position - 2] === 8 && +string[position - 1] === 9) {
-        if (+string[position] < 5) {
-          return false;
-        }
-      }
-    }
-
-    return true;
+    return delta;
   }
 
   private setCaretPosition(ctrl, pos: number) {
+    this.setCaretSelection(ctrl, pos, pos);
+  }
+
+  private setCaretSelection(ctrl, start: number, end: number) {
     // Modern browsers
     if (ctrl.setSelectionRange) {
       ctrl.focus();
-      ctrl.setSelectionRange(pos, pos);
-    
-    // IE8 and below
+      ctrl.setSelectionRange(start, end);
+
+      // IE8 and below
     } else if (ctrl.createTextRange) {
       const range = ctrl.createTextRange();
 
       range.collapse(true);
-      range.moveEnd('character', pos);
-      range.moveStart('character', pos);
+      range.moveEnd('character', start);
+      range.moveStart('character', end);
       range.select();
     }
   }
 }
-
-/*
-
-MM/dd/yyyy
-
-*/
