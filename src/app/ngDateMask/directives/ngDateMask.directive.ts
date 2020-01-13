@@ -4,7 +4,14 @@ import { dayValidator } from '../validators/day.validator';
 import { monthValidator } from '../validators/month.validator';
 import { yearValidator } from '../validators/year.validator';
 
-@Directive({ selector: '[ngDateMask]', host: { '(keydown)': 'onKeyDown($event)', '(input)': 'onInput($event)', '(mousedown)': 'onMouseDown($event)' } })
+@Directive({
+  selector: '[ngDateMask]',
+  host: {
+    '(keydown)': 'onKeyDown($event)',
+    '(input)': 'onInput($event)',
+    '(mousemove)': 'onMouseMove($event)'
+  }
+})
 export class DateMaskDirective implements OnInit {
   private readonly backspace: string = 'Backspace';
   private readonly arrowLeft: string = 'ArrowLeft';
@@ -174,8 +181,8 @@ export class DateMaskDirective implements OnInit {
     }
   }
 
-  onMouseDown() {
-    return false;
+  onMouseMove(e: Event) {
+    e.preventDefault();
   }
 
   onInput(event) {
