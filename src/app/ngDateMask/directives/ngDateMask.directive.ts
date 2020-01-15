@@ -171,6 +171,12 @@ export class DateMaskDirective implements OnInit {
 
       this.setCaretPosition(this.input, index + 1);
 
+      const formatLength = this.formatLength(index);
+
+      if (formatLength === this.formatLengthByIndex[index + delta]) {
+        this.input.dispatchEvent(new Event('change'));
+      }
+
       return false;
     }
 
@@ -193,6 +199,12 @@ export class DateMaskDirective implements OnInit {
 
     if (!this.validatorByIndex[index + delta] && isBeforeEnd && this.input.value.length < this.length && event.inputType !== 'deleteContentBackward') {
       this.input.value += this.separator;
+    }
+
+    const formatLength = this.formatLength(index);
+
+    if (formatLength === this.formatLengthByIndex[index + delta - 1]) {
+      this.input.dispatchEvent(new Event('change'));
     }
   }
 
