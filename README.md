@@ -10,6 +10,8 @@ it wont allow you to enter invalid date/month/year
 
 it does not autofix dates, you have to handle that yourself (e.g. if one enters 31/02/2020 it wont change it)
 
+NOTE: in order to get noticed when the mask is valid and get the value you can bind to the (change) event - it will be triggered when the mask becomes valid (the definition of valid in our case is for all the formats to have reached their lengths)
+
 This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 8.3.9.
 
 ## Development server
