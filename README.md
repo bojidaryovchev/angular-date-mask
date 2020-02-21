@@ -1,4 +1,4 @@
-# ngdatemask
+# ngdatemask (Angular Date Mask)
 
 ngdatemask - an input date mask directive to control input of dates
 
